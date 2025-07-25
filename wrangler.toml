@@ -1,0 +1,16 @@
+name = "llm-proxy"
+main = "src/index.ts"
+compatibility_date = "2024-07-24"
+
+[env.production]
+name = "llm-proxy-prod"
+
+[env.dev]
+name = "llm-proxy-dev"
+
+# Environment variables
+[vars]
+ENVIRONMENT = "development"
+
+# Secrets (set using: wrangler secret put OPENAI_API_KEY)
+# OPENAI_API_KEY = "your-openai-api-key"

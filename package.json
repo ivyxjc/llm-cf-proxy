@@ -1,0 +1,21 @@
+{
+  "name": "openai-proxy-worker",
+  "version": "1.0.0",
+  "description": "OpenAI proxy using Cloudflare Workers and Hono",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "build": "esbuild src/index.ts --bundle --outfile=dist/worker.js --format=esm --platform=neutral --target=es2020"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240724.0",
+    "esbuild": "^0.25.8",
+    "typescript": "^5.8.3",
+    "wrangler": "^4.26.0"
+  },
+  "dependencies": {
+    "hono": "^4.8.5"
+  },
+  "packageManager": "pnpm@9.15.4+sha1.ffa0b5c573381e8035b354028ccff97c8e452047"
+}
