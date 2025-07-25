@@ -36,7 +36,11 @@ class BaseProxy implements Proxy {
             }
 
             const body = await c.req.json();
-            const targetUrl = `${this.base_url()}/${path}?${queryString}`;
+            let targetUrl = `${this.base_url()}/${path}`;
+            if (queryString) {
+                // Append query string to the target URL
+                targetUrl += `?${queryString}`;
+            }
             const headers = {
                 Authorization: `Bearer ${apiKey}`,
                 "Content-Type":
