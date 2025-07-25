@@ -2,15 +2,18 @@ name = "llm-proxy"
 main = "src/index.ts"
 compatibility_date = "2024-07-24"
 
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = [ "LlmProxyDO" ]
+
 [env.production]
 name = "llm-proxy-prod"
 
 [env.dev]
 name = "llm-proxy-dev"
-
-# Environment variables
-[vars]
-ENVIRONMENT = "development"
+durable_objects = { bindings = [
+    { name = "LLM_PROXY_DO", class_name = "LlmProxyDO" },
+] }
 
 # Secrets (set using: wrangler secret put OPENAI_API_KEY)
 # OPENAI_API_KEY = "your-openai-api-key"
