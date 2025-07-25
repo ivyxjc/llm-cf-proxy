@@ -2,16 +2,27 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { DurableObject } from "cloudflare:workers";
 import { getWorkerLocation, handlePath, useDOStubCall } from "./util";
-import { AnthropicProxy, LlmProxyDO, OpenAIProxy, OpenRouterProxy } from "./proxy";
+import {
+    AnthropicProxy,
+    LlmProxyDO,
+    OpenAIProxy,
+    OpenRouterProxy,
+    Proxy,
+} from "./proxy";
+import { Context } from "hono";
 
 export interface Env {
     LLM_PROXY_DO: DurableObjectNamespace<LlmProxyDO>;
 }
 
 const app = new Hono<{ Bindings: Env }>();
-const openaiProxy = new OpenAIProxy();
-const openRouterProxy= new OpenRouterProxy();
-const anthropicProxy = new AnthropicProxy();
+
+// Proxy configuration map
+const proxyConfig: Record<string, Proxy> = {
+    openai: new OpenAIProxy(),
+    openrouter: new OpenRouterProxy(),
+    anthropic: new AnthropicProxy(),
+};
 
 app.use(
     "*",
@@ -22,45 +33,34 @@ app.use(
     })
 );
 
-app.get("/health", (c) => {
-    return c.json({ status: "ok", timestamp: new Date().toISOString() });
+app.get("/health", async (c) => {
+    const { colo, loc } = await getWorkerLocation();
+    return c.json({
+        status: "ok",
+        timestamp: new Date().toISOString(),
+        loc: loc,
+        colo: colo,
+    });
 });
 
-app.post("/openai/*", async (c) => {
-    try {
-        const url = new URL(c.req.url);
-        let path = handlePath(url, "openai");
-        return openaiProxy.proxyRequest(c, path, await useDOStubCall());
-    } catch (error) {
-        console.error("Error in proxy request:", error);
-        return c.json({ error: "Internal server error" }, 500);
-    }
-});
+// Generic proxy handler function
+const createProxyHandler = (pathPrefix: string, proxy: Proxy) => {
+    return async (c: Context) => {
+        try {
+            const url = new URL(c.req.url);
+            const path = handlePath(url, pathPrefix);
+            return proxy.proxyRequest(c, path, await useDOStubCall());
+        } catch (error) {
+            console.error(`Error in ${pathPrefix} proxy request:`, error);
+            return c.json({ error: "Internal server error" }, 500);
+        }
+    };
+};
 
-app.post("/openrouter/*", async (c) => {
-    try {
-        // Get path and query string from the request
-        const url = new URL(c.req.url);
-        let path = handlePath(url, "openrouter");
-        return openRouterProxy.proxyRequest(c, path, await useDOStubCall());
-    } catch (error) {
-        console.error("Error in proxy request:", error);
-        return c.json({ error: "Internal server error" }, 500);
-    }
+// Automatically register all proxy routes
+Object.entries(proxyConfig).forEach(([pathPrefix, proxy]) => {
+    app.post(`/${pathPrefix}/*`, createProxyHandler(pathPrefix, proxy));
 });
-
-app.post("/anthropic/*", async (c) => {
-    try {
-        // Get path and query string from the request
-        const url = new URL(c.req.url);
-        let path = handlePath(url, "anthropic");
-        return anthropicProxy.proxyRequest(c, path, await useDOStubCall());
-    } catch (error) {
-        console.error("Error in proxy request:", error);
-        return c.json({ error: "Internal server error" }, 500);
-    }
-});
-
 
 app.onError((err, c) => {
     console.error("Global error handler:", err);
