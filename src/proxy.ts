@@ -93,6 +93,19 @@ class BaseProxy implements Proxy {
     }
 }
 
+export class CommonProxy extends BaseProxy {
+    url: string;
+
+    constructor(url: string) {
+        super();
+        this.url = url;
+    }
+
+    base_url(): string {
+        return this.url;
+    }
+}
+
 export class OpenAIProxy extends BaseProxy {
     base_url(): string {
         return "https://api.openai.com";
@@ -108,6 +121,12 @@ export class OpenRouterProxy extends BaseProxy {
 export class AnthropicProxy extends BaseProxy {
     base_url(): string {
         return "https://api.anthropic.com";
+    }
+}
+
+export class GeminiProxy extends BaseProxy {
+    base_url(): string {
+        return "https://generativelanguage.googleapis.com";
     }
 }
 

@@ -4,6 +4,8 @@ import { DurableObject } from "cloudflare:workers";
 import { getWorkerLocation, handlePath, useDOStubCall } from "./util";
 import {
     AnthropicProxy,
+    CommonProxy,
+    GeminiProxy,
     LlmProxyDO,
     OpenAIProxy,
     OpenRouterProxy,
@@ -22,6 +24,8 @@ const proxyConfig: Record<string, Proxy> = {
     openai: new OpenAIProxy(),
     openrouter: new OpenRouterProxy(),
     anthropic: new AnthropicProxy(),
+    gemini: new GeminiProxy(),
+    moonshot: new CommonProxy("https://api.moonshot.cn"),
 };
 
 app.use(
