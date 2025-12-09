@@ -15,6 +15,16 @@ import { Context } from "hono";
 
 export interface Env {
     LLM_PROXY_DO: DurableObjectNamespace<LlmProxyDO>;
+    // Comma-separated list of allowed proxy keys (required when real API key is configured)
+    ALLOWED_PROXY_KEYS?: string;
+    // Real API keys for each provider
+    // If configured: validate user key against ALLOWED_PROXY_KEYS, then replace with real key
+    // If not configured: pass through user's token directly
+    OPENAI_API_KEY?: string;
+    OPENROUTER_API_KEY?: string;
+    ANTHROPIC_API_KEY?: string;
+    GEMINI_API_KEY?: string;
+    MOONSHOT_API_KEY?: string;
 }
 
 const app = new Hono<{ Bindings: Env }>();
@@ -25,7 +35,7 @@ const proxyConfig: Record<string, Proxy> = {
     openrouter: new OpenRouterProxy(),
     anthropic: new AnthropicProxy(),
     gemini: new GeminiProxy(),
-    moonshot: new CommonProxy("https://api.moonshot.cn"),
+    moonshot: new CommonProxy("https://api.moonshot.cn", "MOONSHOT_API_KEY"),
 };
 
 app.use(
@@ -49,7 +59,7 @@ app.get("/health", async (c) => {
 
 // Generic proxy handler function
 const createProxyHandler = (pathPrefix: string, proxy: Proxy) => {
-    return async (c: Context) => {
+    return async (c: Context<{ Bindings: Env }>) => {
         try {
             const url = new URL(c.req.url);
             const path = handlePath(url, pathPrefix);

@@ -12,11 +12,26 @@ durable_objects = { bindings = [
     { name = "LLM_PROXY_DO", class_name = "LlmProxyDO" },
 ] }
 
-
 [env.dev]
 name = "llm-proxy-dev"
 durable_objects = { bindings = [
     { name = "LLM_PROXY_DO", class_name = "LlmProxyDO" },
 ] }
 
-# Secrets (set using: wrangler secret put OPENAI_API_KEY)
+# API Key Validation Configuration
+# ================================
+# Validation logic:
+# - If XXX_API_KEY (e.g., OPENAI_API_KEY) is configured:
+#   - User's key must be in ALLOWED_PROXY_KEYS list
+#   - If valid, replace with the real API key
+#   - If invalid, return 403
+# - If XXX_API_KEY is NOT configured:
+#   - Pass through user's token directly (no validation)
+#
+# Secrets (using wrangler secret put):
+# - wrangler secret put ALLOWED_PROXY_KEYS (set to "your-proxy-key-1,your-proxy-key-2")
+# - wrangler secret put OPENAI_API_KEY
+# - wrangler secret put OPENROUTER_API_KEY
+# - wrangler secret put ANTHROPIC_API_KEY
+# - wrangler secret put GEMINI_API_KEY
+# - wrangler secret put MOONSHOT_API_KEY

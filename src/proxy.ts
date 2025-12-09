@@ -1,8 +1,12 @@
 import { DurableObject } from "cloudflare:workers";
 import { Context } from "hono";
 import { Env } from ".";
+
 export interface Proxy {
     base_url(): string;
+
+    // Environment variable name for the real API key of this proxy
+    realApiKeyEnvName(): string;
 
     proxyRequest(
         context: Context,
@@ -16,16 +20,89 @@ class BaseProxy implements Proxy {
         throw new Error("Method 'base_url()' must be implemented.");
     }
 
+    realApiKeyEnvName(): string {
+        throw new Error("Method 'realApiKeyEnvName()' must be implemented.");
+    }
+
+    /**
+     * Validate and potentially replace the API key
+     * 
+     * Logic:
+     * - If {realApiKeyEnvName} (e.g., OPENAI_API_KEY) is configured:
+     *   - Validate user's key against ALLOWED_PROXY_KEYS
+     *   - If valid, replace with the real API key
+     *   - If invalid, return 403
+     * - If {realApiKeyEnvName} is NOT configured:
+     *   - Pass through the user's token directly (no validation)
+     *
+     * @returns { valid: true, apiKey: string } if validation passes or is disabled
+     * @returns { valid: false, error: Response } if validation fails
+     */
+    protected validateApiKey(
+        c: Context
+    ): { valid: true; apiKey: string } | { valid: false; error: Response } {
+        const env = c.env as Env;
+        const authHeader = c.req.header("Authorization");
+        const apiKey = authHeader?.split(" ")[1];
+
+        if (!apiKey) {
+            return {
+                valid: false,
+                error: c.json({ error: "API key not provided" }, 401) as unknown as Response,
+            };
+        }
+
+        // Check if real API key is configured
+        const realApiKeyEnvName = this.realApiKeyEnvName();
+        const realApiKey = (env as unknown as Record<string, string>)[realApiKeyEnvName];
+
+        if (!realApiKey) {
+            // Real API key not configured, pass through the user's token
+            return { valid: true, apiKey };
+        }
+
+        // Real API key is configured, validation is required
+        // Read allowed keys from environment variable
+        const allowedKeysStr = env.ALLOWED_PROXY_KEYS;
+        console.log("allowedKeysStr:", allowedKeysStr, "type:", typeof allowedKeysStr);
+        
+        const allowedKeys: string[] = allowedKeysStr
+            ? allowedKeysStr.split(",").map((k) => k.trim())
+            : [];
+
+        console.log("allowedKeys:", JSON.stringify(allowedKeys), "length:", allowedKeys.length);
+        console.log("apiKey:", apiKey);
+
+        if (allowedKeys.length === 0) {
+            // No allowed keys configured but real API key exists, reject all requests
+            return {
+                valid: false,
+                error: c.json({ error: "Invalid API key, no allowed keys configured" }, 403) as unknown as Response,
+            };
+        }
+        if (!allowedKeys.includes(apiKey)) {
+            // Key not in allowed list
+            return {
+                valid: false,
+                error: c.json({ error: "Invalid API key, not in allowed keys" }, 403) as unknown as Response,
+            };
+        }
+
+        // Key is valid, replace with real API key
+        return { valid: true, apiKey: realApiKey };
+    }
+
     async proxyRequest(
         c: Context,
         path: string,
         useDoStubCall: boolean
     ): Promise<Response> {
         try {
-            const apiKey = c.req.header("Authorization")?.split(" ")[1];
-            if (!apiKey) {
-                return c.json({ error: "API key not configured" }, 500);
+            const validationResult = this.validateApiKey(c);
+            if (!validationResult.valid) {
+                return validationResult.error;
             }
+            const apiKey = validationResult.apiKey;
             // Get query string from the request
             const url = new URL(c.req.url);
             let queryString = url.search;
@@ -95,14 +172,20 @@ class BaseProxy implements Proxy {
 
 export class CommonProxy extends BaseProxy {
     url: string;
+    apiKeyEnvName?: string;
 
-    constructor(url: string) {
+    constructor(url: string, apiKeyEnvName?: string) {
         super();
         this.url = url;
+        this.apiKeyEnvName = apiKeyEnvName;
     }
 
     base_url(): string {
         return this.url;
+    }
+
+    realApiKeyEnvName(): string {
+        return this.apiKeyEnvName ?? "";
     }
 }
 
@@ -110,11 +193,19 @@ export class OpenAIProxy extends BaseProxy {
     base_url(): string {
         return "https://api.openai.com";
     }
+
+    realApiKeyEnvName(): string {
+        return "OPENAI_API_KEY";
+    }
 }
 
 export class OpenRouterProxy extends BaseProxy {
     base_url(): string {
         return "https://openrouter.ai";
+    }
+
+    realApiKeyEnvName(): string {
+        return "OPENROUTER_API_KEY";
     }
 }
 
@@ -122,11 +213,19 @@ export class AnthropicProxy extends BaseProxy {
     base_url(): string {
         return "https://api.anthropic.com";
     }
+
+    realApiKeyEnvName(): string {
+        return "ANTHROPIC_API_KEY";
+    }
 }
 
 export class GeminiProxy extends BaseProxy {
     base_url(): string {
         return "https://generativelanguage.googleapis.com";
+    }
+
+    realApiKeyEnvName(): string {
+        return "GEMINI_API_KEY";
     }
 }
 
