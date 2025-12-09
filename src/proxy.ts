@@ -60,19 +60,13 @@ class BaseProxy implements Proxy {
             // Real API key not configured, pass through the user's token
             return { valid: true, apiKey };
         }
-
         // Real API key is configured, validation is required
         // Read allowed keys from environment variable
         const allowedKeysStr = env.ALLOWED_PROXY_KEYS;
-        console.log("allowedKeysStr:", allowedKeysStr, "type:", typeof allowedKeysStr);
         
         const allowedKeys: string[] = allowedKeysStr
             ? allowedKeysStr.split(",").map((k) => k.trim())
             : [];
-
-        console.log("allowedKeys:", JSON.stringify(allowedKeys), "length:", allowedKeys.length);
-        console.log("apiKey:", apiKey);
-
         if (allowedKeys.length === 0) {
             // No allowed keys configured but real API key exists, reject all requests
             return {
@@ -106,19 +100,25 @@ class BaseProxy implements Proxy {
             // Get query string from the request
             const url = new URL(c.req.url);
             let queryString = url.search;
-
             if (queryString.startsWith("?")) {
                 // Remove leading "?" from the query string
                 queryString = queryString.slice(1);
             }
 
-            const body = await c.req.json();
+            // Try to parse body, handle empty body case
+            let body: unknown = null;
+            try {
+                body = await c.req.json();
+            } catch {
+                // No body or invalid JSON, that's ok
+            }
+
             let targetUrl = `${this.base_url()}/${path}`;
             if (queryString) {
                 // Append query string to the target URL
                 targetUrl += `?${queryString}`;
             }
-            const headers = {
+            const headers: Record<string, string> = {
                 Authorization: `Bearer ${apiKey}`,
                 "Content-Type":
                     c.req.header("Content-Type") || "application/json",
@@ -126,9 +126,10 @@ class BaseProxy implements Proxy {
                     c.req.header("User-Agent") || "PostmanRuntime/7.44.1",
                 Connection: c.req.header("Connection") || "keep-alive",
             };
+
+
             console.log("send request to " + targetUrl);
             if (useDoStubCall) {
-                console.log(`Using Durable Object for proxy request ...`);
                 const doId = c.env.LLM_PROXY_DO.idFromName("wnam");
 
                 // Create Durable Object instance for the specified region
@@ -140,7 +141,7 @@ class BaseProxy implements Proxy {
                 const result: Response = await doStub.proxyRequest(targetUrl, {
                     method: c.req.method,
                     headers,
-                    body: JSON.stringify(body),
+                    body: body ? JSON.stringify(body) : undefined,
                 });
 
                 // Clone the response to avoid body already read issues
@@ -153,7 +154,7 @@ class BaseProxy implements Proxy {
                 const result: Response = await fetch(targetUrl, {
                     method: c.req.method,
                     headers,
-                    body: JSON.stringify(body),
+                    body: body ? JSON.stringify(body) : undefined,
                 });
 
                 // Clone the response to avoid body already read issues

@@ -76,6 +76,26 @@ Object.entries(proxyConfig).forEach(([pathPrefix, proxy]) => {
     app.post(`/${pathPrefix}/*`, createProxyHandler(pathPrefix, proxy));
 });
 
+Object.entries(proxyConfig).forEach(([pathPrefix, proxy]) => {
+    app.get(`/${pathPrefix}/*`, createProxyHandler(pathPrefix, proxy));
+});
+
+Object.entries(proxyConfig).forEach(([pathPrefix, proxy]) => {
+    app.put(`/${pathPrefix}/*`, createProxyHandler(pathPrefix, proxy));
+});
+
+Object.entries(proxyConfig).forEach(([pathPrefix, proxy]) => {
+    app.patch(`/${pathPrefix}/*`, createProxyHandler(pathPrefix, proxy));
+});
+
+Object.entries(proxyConfig).forEach(([pathPrefix, proxy]) => {
+    app.delete(`/${pathPrefix}/*`, createProxyHandler(pathPrefix, proxy));
+});
+
+Object.entries(proxyConfig).forEach(([pathPrefix, proxy]) => {
+    app.options(`/${pathPrefix}/*`, createProxyHandler(pathPrefix, proxy));
+});
+
 app.onError((err, c) => {
     console.error("Global error handler:", err);
     return c.json({ error: "Internal server error" }, 500);
