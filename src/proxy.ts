@@ -8,6 +8,12 @@ export interface Proxy {
     // Environment variable name for the real API key of this proxy
     realApiKeyEnvName(): string;
 
+    // Extract API key from incoming request
+    extractApiKey(c: Context): string | undefined;
+
+    // Build headers for outgoing request
+    buildHeaders(apiKey: string, c: Context): Record<string, string>;
+
     proxyRequest(
         context: Context,
         path: string,
@@ -24,9 +30,24 @@ class BaseProxy implements Proxy {
         throw new Error("Method 'realApiKeyEnvName()' must be implemented.");
     }
 
+    // Default: extract from Authorization header with Bearer prefix
+    extractApiKey(c: Context): string | undefined {
+        const authHeader = c.req.header("Authorization");
+        return authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : authHeader;
+    }
+
+    // Default: Bearer token auth with common headers
+    buildHeaders(apiKey: string, c: Context): Record<string, string> {
+        return {
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": c.req.header("Content-Type") || "application/json",
+            "User-Agent": c.req.header("User-Agent") || "PostmanRuntime/7.44.1",
+        };
+    }
+
     /**
      * Validate and potentially replace the API key
-     * 
+     *
      * Logic:
      * - If {realApiKeyEnvName} (e.g., OPENAI_API_KEY) is configured:
      *   - Validate user's key against ALLOWED_PROXY_KEYS
@@ -42,8 +63,7 @@ class BaseProxy implements Proxy {
         c: Context
     ): { valid: true; apiKey: string } | { valid: false; error: Response } {
         const env = c.env as Env;
-        const authHeader = c.req.header("Authorization");
-        const apiKey = authHeader?.split(" ")[1];
+        const apiKey = this.extractApiKey(c);
 
         if (!apiKey) {
             return {
@@ -63,7 +83,7 @@ class BaseProxy implements Proxy {
         // Real API key is configured, validation is required
         // Read allowed keys from environment variable
         const allowedKeysStr = env.ALLOWED_PROXY_KEYS;
-        
+
         const allowedKeys: string[] = allowedKeysStr
             ? allowedKeysStr.split(",").map((k) => k.trim())
             : [];
@@ -97,6 +117,7 @@ class BaseProxy implements Proxy {
                 return validationResult.error;
             }
             const apiKey = validationResult.apiKey;
+            console.log("apiKey: " + apiKey);
             // Get query string from the request
             const url = new URL(c.req.url);
             let queryString = url.search;
@@ -118,14 +139,9 @@ class BaseProxy implements Proxy {
                 // Append query string to the target URL
                 targetUrl += `?${queryString}`;
             }
-            const headers: Record<string, string> = {
-                Authorization: `Bearer ${apiKey}`,
-                "Content-Type":
-                    c.req.header("Content-Type") || "application/json",
-                "User-Agent":
-                    c.req.header("User-Agent") || "PostmanRuntime/7.44.1",
-                Connection: c.req.header("Connection") || "keep-alive",
-            };
+            console.log("target url: " + targetUrl);
+
+            const headers = this.buildHeaders(apiKey, c);
 
 
             console.log("send request to " + targetUrl);
@@ -218,6 +234,21 @@ export class AnthropicProxy extends BaseProxy {
     realApiKeyEnvName(): string {
         return "ANTHROPIC_API_KEY";
     }
+
+    // Anthropic uses x-api-key header
+    extractApiKey(c: Context): string | undefined {
+        return c.req.header("x-api-key");
+    }
+
+    // Anthropic uses x-api-key and requires Anthropic-Version header
+    buildHeaders(apiKey: string, c: Context): Record<string, string> {
+        return {
+            "Content-Type": c.req.header("Content-Type") || "application/json",
+            "User-Agent": c.req.header("User-Agent") || "PostmanRuntime/7.44.1",
+            "x-api-key": apiKey,
+            "Anthropic-Version": c.req.header("Anthropic-Version") || "2023-06-01",
+        };
+    }
 }
 
 export class GeminiProxy extends BaseProxy {
@@ -244,8 +275,7 @@ export class LlmProxyDO extends DurableObject {
             const response = await fetch(input, init);
 
             console.debug(
-                `Response status: ${
-                    response.status
+                `Response status: ${response.status
                 }, Content-Type: ${response.headers.get("content-type")}`
             );
             return response;
